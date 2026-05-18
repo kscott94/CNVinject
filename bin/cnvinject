@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Directory containing this script: CNVinject/bin
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Project root: CNVinject
+ROOT_DIR="$(cd "$BIN_DIR/.." && pwd)"
+
+# Allow user to override Python executable if needed
+PYTHON="${CNVINJECT_PYTHON:-python3}"
+
+# Add CNVinject/lib to Python import path
+export PYTHONPATH="$ROOT_DIR/lib:${PYTHONPATH:-}"
+
+# ------------------------------------------------------------
+# Check Python dependencies
+# ------------------------------------------------------------
+if ! "$PYTHON" - <<'PY_CHECK' >/dev/null 2>&1
+import pysam
+PY_CHECK
+then
+    echo "ERROR: cnvinject could not find the required Python package: pysam" >&2
+    echo "" >&2
+    echo "This usually means cnvinject is not running inside the Python environment where pysam is installed." >&2
+    echo "" >&2
+    echo "Try one of these:" >&2
+    echo "  1. Activate your virtual environment:" >&2
+    echo "       source /path/to/.venv/bin/activate" >&2
+    echo "" >&2
+    echo "  2. Install pysam into the active environment:" >&2
+    echo "       python3 -m pip install pysam" >&2
+    echo "" >&2
+    echo "  3. Tell cnvinject which Python to use:" >&2
+    echo "       export CNVINJECT_PYTHON=/path/to/.venv/bin/python" >&2
+    echo "       cnvinject --help" >&2
+    echo "" >&2
+    echo "Current Python being used:" >&2
+    echo "  $PYTHON" >&2
+    exit 1
+fi
+
+# ------------------------------------------------------------
+# Check external command-line dependencies
+# ------------------------------------------------------------
+missing_tools=()
+
+for tool in samtools bwa; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        missing_tools+=("$tool")
+    fi
+done
+
+if [ "${#missing_tools[@]}" -gt 0 ]; then
+    echo "ERROR: cnvinject could not find required command-line tool(s): ${missing_tools[*]}" >&2
+    echo "" >&2
+    echo "Please install them or make sure they are available in your PATH." >&2
+    echo "" >&2
+    echo "Current PATH:" >&2
+    echo "  $PATH" >&2
+    exit 1
+fi
+
+# Run the CLI
+"$PYTHON" "$ROOT_DIR/lib/cli.py" "$@"
