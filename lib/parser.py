@@ -24,10 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     del_parser.add_argument(
         "--copy-number",
         dest="copy_number",
-        type=int,
+        type=float,
         required=True,
-        choices=[0, 1],
-        help="Deletion copy number. Supported: 0 or 1."
+        help="Copy number. Supports decimal values from 0 to <2. "
+        "Examples: 0 homozygous deletion, 1 for hemizygous deletion, "
+        "1.5 for partial/mosaic deletion, etc."
     )
 
     # cnvinject dup ----------------------------------------------
@@ -41,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     dup_parser.add_argument(
         "--copy-number",
         dest="copy_number",
-        type=int,
+        type=float,
         required=True,
         help="Duplication copy number. Must be greater than 2."
     )
@@ -148,6 +149,16 @@ def add_common_cnv_args(parser: argparse.ArgumentParser) -> None:
         "--getpatch",
         action="store_true",
         help="Output edited patch only instead of full edited BAM."
+    )
+
+    parser.add_argument(
+        "--all-alignments",
+        dest="all_alignments",
+        action="store_true",
+        help=(
+            "NOT YET IMPLEMENTED. "
+            "Make secondary and supplementary alignments eligible for CNV editing."
+        ),
     )
 
     parser.add_argument(

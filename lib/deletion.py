@@ -7,14 +7,17 @@ from collections import defaultdict
 import pysam
 
 from patch import GenomicInterval, PatchPaths
-from helpers import sort_and_index_bam
+from helpers import (sort_and_index_bam,
+                     deletion_fraction,
+                     sample_qnames_file_for_deletion,
+                     load_qnames)
 
 @dataclass
 class ReadPairStatus:
     """
     Tracks the primary alignment coordinates for mate 1 and mate 2.
 
-    For CN0 deletion editing, a read pair is removed only if the entire
+    For deletion editing, a read pair is removed only if the entire
     paired-end fragment (or full singleton fragment) is fully contained inside the
     deletion interval.
 
@@ -117,7 +120,7 @@ class ReadPairStatus:
 
     def is_fully_inside_interval(self, interval: GenomicInterval) -> bool:
         """
-        Return True if this qname should be removed for CN0 deletion editing.
+        Return True if this qname should be removed for deletion editing.
 
         Removal rules:
 
@@ -204,23 +207,25 @@ class ReadPairStatus:
 
 
 @dataclass
-class CN0DeletionResult:
+class DeletionResult:
     """
-    Summary of CN0 deletion patch editing.
+    Summary of deletion patch editing.
     """
 
     input_patch_bam: Path
     edited_patch_bam: Path
     internal_qnames: Path
+    deleted_internal_qnames: Path
     n_internal_qnames: int
+    n_deleted_internal_qnames: int
     n_input_records: int
     n_removed_records: int
     n_kept_records: int
 
 
-class CN0DeletionEditor:
+class DeletionEditor:
     """
-    Edit a raw patch BAM for a CN0 deletion.
+    Edit a raw patch BAM for a deletion.
 
     This editor removes read pairs whose full paired-end fragment span is
     contained inside the deletion interval.
@@ -241,11 +246,17 @@ class CN0DeletionEditor:
         input_patch_bam: str | Path,
         output_prefix: str | Path,
         interval: GenomicInterval,
+        copy_number: float = 0.0,
+        seed: int = 1,
+        all_alignments: bool = False,
         threads: int = 1,
     ):
         self.input_patch_bam = Path(input_patch_bam)
         self.paths = PatchPaths(output_prefix)
         self.interval = interval
+        self.copy_number = copy_number
+        self.seed = seed
+        self.all_alignments = all_alignments
         self.threads = threads
 
         self.edited_patch_bam = self.paths.prefix.with_name(
@@ -256,11 +267,18 @@ class CN0DeletionEditor:
             f"{self.paths.prefix.name}.internal.qnames.txt"
         )
 
+        self.deleted_internal_qnames = self.paths.prefix.with_name(
+            f"{self.paths.prefix.name}.deleted.internal.qnames"
+        )
+
         self.status_by_qname: dict[str, ReadPairStatus] = defaultdict(ReadPairStatus)
+        self.internal_qnames_all: set[str] = set()
         self.qnames_to_remove: set[str] = set()
+
 
         self.n_input_records = 0
         self.n_removed_records = 0
+        self.n_deleted_internal_qnames = 0
         self.n_kept_records = 0
 
     def classify_patch_reads(self) -> None:
@@ -280,7 +298,7 @@ class CN0DeletionEditor:
                 status = self.status_by_qname[read.query_name]
                 status.add_read(read)
 
-        self.qnames_to_remove = {
+        self.internal_qnames_all = {
             qname
             for qname, status in self.status_by_qname.items()
             if status.is_fully_inside_interval(self.interval)
@@ -288,11 +306,28 @@ class CN0DeletionEditor:
 
     def write_internal_qnames(self) -> None:
         """
-        Write qnames that will be removed from the patch.
+        Write all fully internal qnames before copy-number sampling.
         """
         with open(self.internal_qnames, "w") as handle:
-            for qname in sorted(self.qnames_to_remove):
+            for qname in sorted(self.internal_qnames_all):
                 handle.write(qname + "\n")
+
+
+    def write_deleted_internal_qnames(self) -> None:
+        """
+        Randomly sample internal qnames according to requested copy number.
+        """
+        n_selected = sample_qnames_file_for_deletion(
+            input_qnames=self.internal_qnames,
+            output_qnames=self.deleted_internal_qnames,
+            copy_number=float(self.copy_number),
+            seed=int(self.seed),
+        )
+
+        self.qnames_to_remove = load_qnames(self.deleted_internal_qnames)
+        self.n_deleted_internal_qnames = n_selected
+
+
 
     def write_edited_patch_bam(self) -> None:
         """
@@ -328,20 +363,23 @@ class CN0DeletionEditor:
             remove_input=True,
         )
 
-    def run(self) -> CN0DeletionResult:
+    def run(self) -> DeletionResult:
         """
-        Run full CN0 deletion patch editing.
+        Run deletion patch editing.
         """
         self.classify_patch_reads()
         self.write_internal_qnames()
+        self.write_deleted_internal_qnames()
         self.write_edited_patch_bam()
         self.sort_and_index_edited_patch()
 
-        result = CN0DeletionResult(
+        result = DeletionResult(
             input_patch_bam=self.input_patch_bam,
             edited_patch_bam=self.edited_patch_bam,
             internal_qnames=self.internal_qnames,
-            n_internal_qnames=len(self.qnames_to_remove),
+            deleted_internal_qnames=self.deleted_internal_qnames,
+            n_internal_qnames=len(self.internal_qnames_all),
+            n_deleted_internal_qnames=len(self.qnames_to_remove),
             n_input_records=self.n_input_records,
             n_removed_records=self.n_removed_records,
             n_kept_records=self.n_kept_records,
@@ -350,13 +388,15 @@ class CN0DeletionEditor:
         self.print_summary(result)
         return result
 
-    def print_summary(self, result: CN0DeletionResult) -> None:
-        print("CN0 deletion patch editing complete")
+    def print_summary(self, result: DeletionResult) -> None:
+        print("Deletion patch editing complete")
+        print(f"Copy number: {self.copy_number}")
+        print(f"Deletion fraction: {deletion_fraction(self.copy_number):.4f}")
         print(f"Deletion interval: {self.interval}")
         print(f"Input patch BAM: {result.input_patch_bam}")
         print(f"Edited patch BAM: {result.edited_patch_bam}")
-        print(f"Internal qnames removed: {result.internal_qnames}")
-        print(f"Fully internal fragment qnames: {result.n_internal_qnames:,}")
         print(f"Input patch records: {result.n_input_records:,}")
+        print(f"All internal qnames: {result.n_internal_qnames:,}")
+        print(f"Deleted internal qnames sampled: {result.n_deleted_internal_qnames:,}")
         print(f"Removed records: {result.n_removed_records:,}")
         print(f"Kept records: {result.n_kept_records:,}")

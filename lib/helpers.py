@@ -2,6 +2,7 @@ import re
 import subprocess
 import argparse
 import shlex
+import hashlib
 from pathlib import Path
 
 
@@ -528,3 +529,87 @@ def cleanup_intermediate_files(
     for path in candidates:
         if path not in keep:
             remove_file_if_exists(path)
+
+
+def deletion_fraction(copy_number: float) -> float:
+    """
+    Fraction of eligible molecules to delete/modify for a deletion.
+
+    Assumes normal diploid copy number is 2.
+    """
+    if copy_number < 0 or copy_number >= 2:
+        raise ValueError("Deletion copy number must be >= 0 and < 2.")
+
+    return 1.0 - (copy_number / 2.0)
+
+
+def qname_selected_for_deletion(
+    qname: str,
+    copy_number: float,
+    seed: int,
+) -> bool:
+    """
+    Decide whether a qname is deleted.
+
+    Same qname + same seed + same copy number always gives the same result.
+    """
+    prob = deletion_fraction(copy_number)
+
+    #generate a random seed
+    key = f"{seed}|{copy_number}|{qname}".encode()
+    digest = hashlib.sha256(key).hexdigest()
+
+    value = int(digest[:16], 16)
+    random_value = value / float(16**16)
+
+    return random_value < prob
+
+
+def sample_qnames_file_for_deletion(
+    input_qnames: str | Path,
+    output_qnames: str | Path,
+    copy_number: float,
+    seed: int,
+) -> int:
+    """
+    Read qnames from input_qnames and write the subset selected for deletion.
+
+    Returns number of selected qnames.
+    """
+    input_qnames = Path(input_qnames)
+    output_qnames = Path(output_qnames)
+
+    n_selected = 0
+
+    with open(input_qnames) as in_handle, open(output_qnames, "w") as out_handle:
+        for line in in_handle:
+            qname = line.strip()
+            if not qname:
+                continue
+
+            if qname_selected_for_deletion(
+                qname=qname,
+                copy_number=copy_number,
+                seed=seed,
+            ):
+                out_handle.write(qname + "\n")
+                n_selected += 1
+
+    return n_selected
+
+
+def load_qnames(qnames_file: str | Path) -> set[str]:
+    """
+    Load qnames from a one-column text file.
+    """
+    qnames_file = Path(qnames_file)
+
+    qnames = set()
+
+    with open(qnames_file) as handle:
+        for line in handle:
+            qname = line.strip()
+            if qname:
+                qnames.add(qname)
+
+    return qnames
