@@ -1,10 +1,12 @@
 # CNVinject
 
-CNVinject is a command-line tool for injecting artificial copynumber variants (CNVs) into existing BAM files while preserving the sequencing characteristics of the original sample.
+CNVinject is a command-line tool for injecting artificial copy number variants (CNVs) into existing BAM files while preserving the noise profile of the original sample.
 
-The primary goal of CNVinject is to create realistic positive-control BAMs for benchmarking sequencing depth-based CNV detection workflows, especially in difficult sequencing contexts such as low-input, whole-genome-amplified, low-coverage, sparsley, noisy, or unevenly amplified libraries. CNVinject was designed for situations where the **noise is part of the data** and should be retained.
+The primary goal of CNVinject is to generate realistic positive-control BAMs for benchmarking sequencing depth- or breakpoint-based CNV detection workflows, especially in difficult sequencing contexts such as low-input, whole-genome-amplified, low-coverage, sparsley, noisy, or unevenly amplified libraries. CNVinject was designed for situations where the **noise is part of the data** and should be retained.
 
-CNVinject modifies an existing BAM by extracting aligned reads from a defined local genomic region (patch), editing the reads in that patch to represent the desired copynumber state, and then merging the edited patch back into the original BAM. This approach preserves many properties of the original data, including:
+CNVinject modifies an existing BAM by extracting aligned reads from a defined local genomic region (patch), editing the reads in that patch to represent the desired copy number state, and then replacing edited reads in original BAM to simulate a CNV. This approach preserves many properties of the original data and is compatible with read-depth and breakpoint aware CNV callers. The program does not rely on contig generation and read eligibility is defined by the user. 
+
+What CNVinject preserves:
 
 - breakpoints at defined interval
 - native sequencing depth;
@@ -13,7 +15,7 @@ CNVinject modifies an existing BAM by extracting aligned reads from a defined lo
 - sparse or low-coverage regions;
 - library-specific noise;
 - duplicate reads;
-- local mapping artifacts recorded in CIGAR string;
+- local mapping artifacts recorded in CIGAR string (mismatches, deletions, insertions);
 - incomplete read pairs;
 - read-length, insert-size, and alignment behavior.
 
@@ -21,7 +23,7 @@ CNVinject modifies an existing BAM by extracting aligned reads from a defined lo
 
 > **Current implementation status**
 >
-> - `cnvinject del --copy-number [0-2] is implemented for simulating deletions.
+> - `cnvinject del --copy-number [0 to <2] is implemented for simulating deletions.
 > - `cnvinject dup` is a placeholder for duplication simulation.
 > - `cnvinject mergepatch` is implemented for merging an edited patch or alignments back into the original full BAM.
 
@@ -52,20 +54,19 @@ CNVinject uses a patch-based workflow:
 5. **Align synthetic reads** to reference genome.
 6. **Replace original patch reads with synthic aligned read in input BAM** using `cnvinject mergepatch`.
 
-To simulate deletions, CNVinject removes read pairs (or singletons) from the target interval and edits reads that overlap breakpoints. Breakpoint reads are edited such that their sequecences match that of the reference genome adjacent to the target interval. Softclipped sequences, single nucleotide mutations, single nucleotide deletions, and indels recorded in the CIGAR string in the original unmodified read are retained in the new read in order to preserve pre-existing sequencing artifacts as much as possible. Point mutations are introduced as follows: C>T, T>C, A>G, and G>A. This mutation scheme follows a purine>purine and pyrimidnie>pyrimidine mutation rule. 
+To simulate deletions, CNVinject removes read pairs (or singletons) from the target interval and edits reads that overlap breakpoints. Breakpoint reads are edited such that their sequecences match that of the reference genome adjacent to the target interval while preserving insert length and pari orientation. Softclipped sequences, single nucleotide mutations, single nucleotide deletions, and indels recorded in the CIGAR string in the original unmodified read are perpetuated in the edited reads in order to preserve pre-existing sequencing artifacts as much as possible. Substitutions are introduced as follows: C>T, T>C, A>G, and G>A. This mutation scheme follows a purine>purine and pyrimidnie>pyrimidine mutation rule. **Small variants in reads edited by CNVinject should be treated as artifacts**. 
 
-To simulate duplications, reads that overlap the target interval are randomly sampled from doner bam files that presumably were prepared in using the same libarary prep strategy as the input bam and therefor share the same noise and artifacts as the input bam. Internal and breakpoint reads from each doner bam is extracted and combined into a single file before read pairs (or singletons) are randomly subsampled to increase the coverage at target region proportional to copynumber. 
+To simulate duplications, reads that overlap the target interval are randomly sampled from doner bam files that presumably were prepared using the same libarary prep strategy as the input bam and therefore share the same noise and coverage profile as the input bam. Internal and breakpoint reads from each doner bam are extracted and combined into a single file before read pairs (or singletons) are randomly subsampled to increase the coverage at target region proportional to copy number. 
 
-It is important to note that the defined target inerval of the input bam is presumed to be diploid, and therefore reads will be added or removed (and breakpoint reads modified) at a rate relative to the imput bam. For example, if the specified copy number is 1, then the coverage of the input bam will be roughly halfed. 
-
-The edited patch is then merged back into the original BAM so that only the target region is altered while the rest of the BAM remains unchanged.
-
+It is important to note that the defined target inerval of the input bam is presumed diploid, and therefore reads will be added or removed (and breakpoint reads modified) at a rate relative to the imput bam. For example, if the specified copy number is 1, then half of the reads in the interval will be randomly selected for removal to reduce the coverage in the target interal by 50%.
 
 ---
 
 ## Limitations
 
-CNVinject is under active development. Haplotype and allele specific injections are not supported at this time.
+CNVinject is under active development. 
+- Haplotype and allele specific injections are not supported at this time.
+- The copy number of target loci in the input BAM is presumed diploid. A later implemenation may support a haploid-state. 
 
 ---
 
