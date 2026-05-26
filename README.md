@@ -9,22 +9,22 @@ CNVinject modifies an existing BAM by extracting aligned reads from a defined lo
 What CNVinject preserves:
 
 - breakpoints where possibe
-- native sequencing depth;
-- uneven and low coverage;
-- whole-genome amplification artifacts;
-- library-specific noise;
-- duplicate reads;
-- local mapping artifacts recorded in CIGAR string (mismatches, deletions, insertions);
-- incomplete read pairs;
-- read-length, insert-size, and alignment behavior.
+- native sequencing depth
+- uneven and low coverage
+- whole-genome amplification artifacts
+- library-specific noise
+- duplicate reads
+- local mapping artifacts recorded in CIGAR string (mismatches, deletions, insertions)
+- incomplete read pairs
+- read-length, insert-size, and alignment behavior
 
 ---
 
 > **Current implementation status**
 >
-> - `cnvinject del` --copy-number [0 to <2] is implemented for simulating deletions.
-> - `cnvinject dup` is a placeholder for duplication simulation.
-> - `cnvinject mergepatch` is implemented for merging an edited patch or alignments back into the original full BAM.
+> - `cnvinject del` --copy-number [0 to <2] is implemented for simulating deletions
+> - `cnvinject dup` is a placeholder for duplication simulation
+> - `cnvinject mergepatch` is implemented for merging an edited patch or alignments back into the original full BAM
 
 ---
 
@@ -32,12 +32,12 @@ What CNVinject preserves:
 
 CNVinject was originally designed for ultra-low-input, whole-genome-amplified sequencing libraries, where amplification bias, allelic dropout, uneven coverage, duplicate reads, and sparse genomic representation can make some simulation approaches unrealistic. CNVinject generates realistic artificial CNV-positive BAM files for:
 
-- benchmarking read-depth CNV callers;
-- when cell lines with desired CNVs are not accessible;
-- testing CNV detection limits in data with low coverage, sparse coverage, amplification bias, sequencing and mapping artifacts;
-- creating positive controls from real BAMs;
-- comparing breakpoint sensitivity across defined genomic intervals;
-- validating pipelines where retaining the original sample noise is important.
+- benchmarking read-depth CNV callers
+- when cell lines with desired CNVs are not accessible
+- testing CNV detection limits in data with low coverage, sparse coverage, amplification bias, sequencing and mapping artifacts
+- creating positive controls from real BAMs
+- comparing breakpoint sensitivity across defined genomic intervals
+- validating pipelines where retaining the original sample noise is important
 
 Inermediate fastq files (breakpoint reads only) with CNV injections can be retained with `--disable-cleanup ` where raw fastq files are neccessary for benchmarking. Alternatively, users can convert the edited BAM back to fastq. It is important to note that the edited fastq reads are designed to maintain sequencing and mapping artifacts present in the original alignments and therefore small variants should be treated as artifacts. 
 
