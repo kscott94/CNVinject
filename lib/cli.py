@@ -94,6 +94,8 @@ def run_deletion(args: argparse.Namespace) -> None:
         edited_patch_bam=deletion_result.edited_patch_bam,
         output_prefix=output_prefix,
         interval=interval,
+        copy_number=args.copy_number,
+        seed=seed,
     )
 
     breakpoint_result = breakpoint_classifier.run()

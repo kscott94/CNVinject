@@ -64,7 +64,8 @@ class FinalPatchBuilder:
             reader = csv.DictReader(handle, delimiter="\t")
 
             for row in reader:
-                if row.get("is_breakpoint_candidate") == "True":
+                if (row.get("is_breakpoint_candidate") == "True"
+                        and row.get("selected_for_deletion") == "True"):
                     qnames.add(row["qname"])
 
         return qnames

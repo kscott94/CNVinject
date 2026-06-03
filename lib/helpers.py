@@ -521,6 +521,7 @@ def cleanup_intermediate_files(
         Path(f"{prefix}.breakpoint.singletons.bam.bai"),
         Path(f"{prefix}.breakpoint.paired.interleaved.fastq"),
         Path(f"{prefix}.breakpoint.singletons.fastq"),
+        Path(f"{prefix}.deleted.internal.qnames"),
         #Path(f"{prefix}.patch.qnames.txt"), keep patch qnames for mergepatch
         Path(f"{prefix}.internal.qnames.txt"),
         Path(f"{prefix}.breakpoint.candidates.tsv"),

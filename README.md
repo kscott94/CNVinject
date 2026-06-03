@@ -52,36 +52,37 @@ CNVinject uses a patch-based workflow for speed and memory optimization:
 3. **Edit the patch** to introduce the desired copy number state.
 4. **Synthesize artifical fastq reads** that overlap with breakpoints.
 5. **Align synthetic, breakpoint reads** to reference genome.
-6. **Replace original patch reads with edited reads in input BAM**.
+6. **Replace original patch reads with edited reads 
+7. **Patch the input BAM with edited reads**.
 
-To simulate deletions, CNVinject removes read pairs (or singletons) from the target interval and edits reads that overlap breakpoints. Breakpoint reads are edited such that their sequecences match that of the reference genome adjacent to the target interval while preserving insert length and pair orientation. Softclipped sequences, single nucleotide mutations and indels recorded in the CIGAR string in the original unmodified read are perpetuated in the edited reads in order to preserve pre-existing sequencing artifacts as much as possible. Substitutions are introduced as follows: C>T, T>C, A>G, and G>A. This mutation scheme follows a purine>purine and pyrimidnie>pyrimidine mutation rule. **Small variants in reads edited by CNVinject should be treated as artifacts**. 
+To simulate deletions, CNVinject removes read pairs (or singletons) from the target interval and edits reads that overlap breakpoints. Breakpoint reads are edited such that their sequecences match that of the reference genome adjacent to the target interval while preserving insert length and pair orientation. Softclipped sequences, single nucleotide mutations and indels recorded in the CIGAR string of the original unmodified read are perpetuated in the edited reads in order to preserve pre-existing sequencing artifacts as much as possible. Substitutions are introduced as follows: C>T, T>C, A>G, and G>A. This mutation scheme follows a purine>purine and pyrimidnie>pyrimidine mutation rule. **Small variants in reads edited by CNVinject should be treated as artifacts**. 
 
 To simulate duplications, reads that overlap the target interval are randomly sampled from doner bam files that presumably were prepared using the same libarary prep strategy as the input bam and therefore share the same noise and coverage profile as the input bam. Internal and breakpoint reads from each doner bam are extracted and combined into a single file before read pairs (or singletons) are randomly subsampled to increase the coverage at target region proportional to copy number. 
 
-It is important to note that the defined target inerval of the input bam is presumed diploid, and therefore reads will be added or removed (and breakpoint reads modified) at a rate relative to the imput bam. For example, if the specified copy number is 1, then half of the reads in the interval will be randomly selected for removal to reduce the coverage in the target interal by 50%.
+It is important to note that the defined target interval of the input bam is presumed diploid, and therefore reads will be added or removed (and breakpoint reads modified) at a rate relative to the input bam. For example, if the specified copy number is 1, then half of the reads in the interval will be randomly selected for removal/breakpoint editing to reduce the coverage in the target interal by ~50%.
 
 ---
-## Read eligibility
-Currently, only primary alignments are eligible for modification. Secondary and supplemental alignments will not be touched since their alignment to the target interval is not certain and therefore may be interpreted as noise or atifact. 
+### Read eligibility
+Currently, only primary alignments are eligible for modification. Secondary and supplemental alignments will not be touched since their alignment to the target interval is not certain and therefore may be interpreted as noise or artifact. 
 
-`--mapq` controls which reads are eligible for CNV editing. Users can opt to retain low mapq reads in the target interval at their original concentration to simualte low quality/uncertain alignments in the target interval. For noisy whole-genome-amplified or sparse libraries, the appropriate MAPQ threshold depends on the benchmarking goal. If the goal is to preserve the full noise profile of the original BAM, `--mapq 10` is preferable and is the default.
+`--mapq` controls which reads are eligible for CNV editing. Users can opt to retain low mapq reads in the target interval at their original concentration to simualte low quality/uncertain alignments in the target interval. The appropriate MAPQ threshold depends on the benchmarking goal. If the goal is to preserve the full noise profile of the original BAM, `--mapq 10` is preferable and is the default.
 
-
-In whole-genome-amplified or ultra-low-input sequencing libraries, duplicates may be part of the observed read-depth structure. Removing all duplicates before simulation can make the injected CNV less representative of the original data. CNVinject is designed to preserve duplicated reads. After a CNV-injected bam is generated, it is recommended to remove and/or remark duplicated reads if desired. 
+In whole-genome-amplified or ultra-low-input sequencing libraries, duplicates may be part of the observed read-depth structure. Removing all duplicates before simulation can make the injected CNV less representative of the original data. CNVinject is designed to preserve duplicated reads. After a CNV-injected BAM is generated, it is recommended to remove duplicate markings and/or remark duplicated reads. 
 
 ---
 
-## Limitations
+### Limitations
 
 CNVinject is under active development. 
 - Haplotype and allele specific injections are not supported at this time.
-- The copy number of target loci in the input BAM is presumed diploid. A later implemenation may support a haploid samples. 
+- The copy number of the target interval in the input BAM is presumed diploid. A later implemenation may support haploid samples. 
 
 ---
 
+
 # Installation
 
-## Dependencies and recommended installation
+### Dependencies and recommended installation
 
 CNVinject was developed and tested with:
 
@@ -90,34 +91,22 @@ CNVinject was developed and tested with:
 - samtools 1.19.2 using htslib 1.19
 - bwa 0.7.17-r1188
 
-### 1. Clone the repository
 
 ```bash
+# 1. Clone the repository
 git clone https://github.com/kscott94/CNVinject.git
 cd CNVinject
-```
+chmod +x CNVinject/bin/cnvinject
 
-### 2. Create the conda environment
-
-```bash
+# 2. Create the conda environment
 conda env create -f environment.yml
 conda activate cnvinject
-```
 
-### 3. Add CNVinject/bin to your `PATH`
-
-Replace `</path/to/CNVinject>` with the full path to your cloned repository.
-
-```bash
-
+# 3. Add CNVinject/bin to your `PATH`. Replace `</path/to/CNVinject>` with the full path to your cloned repository.
 echo 'export PATH="/path/to/CNVinject/bin:$PATH"' >> ~/.bash_profile
 source ~/.bash_profile
 
-```
-
-### 4. Test the installation
-
-```bash
+# 4. Test the installation
 cnvinject --help
 ```
 
@@ -141,8 +130,13 @@ cnvinject del \
   --getpatch \
   --copy-number 0 \
   --interval chr17:30780079-31936302 \
-  --outdir ~/project/NF1_CN0 \
-  -t 1
+  --outdir ~/project/NF1_CN0
+```
+Output:
+```text
+Sample1.NF1.CN0.final.patch.bam
+Sample1.NF1.CN0.final.patch.bam.bai
+Sample1.NF1.CN0.patch.qnames.txt
 ```
 
 This command extracts a patch around the requested interval, removes or modifies eligible reads from the deletion interval, and writes a coordinate sorted and indexed final.patch.bam. With `--getpatch`, the program will stop after patch generation. If the user wants a whole genome BAM, do not include `--getpatch` or run `cnvinject mergepatch`.
@@ -154,16 +148,22 @@ cnvinject mergepatch \
   --full-bam Sample1.bam \
   --patch-bam Sample1.NF1.CN0.final.patch.bam \
   --patch-reads Sample1.NF1.CN0.patch.qnames.txt \
-  -o Sample1.NF1.CN0.final.bam \
-  -t 8
+  -o Sample1.NF1.CN0.final.bam
 ```
 
-
-> Adjust the `--patch-bam` and `--patch-reads` filenames to match the exact files produced by your `cnvinject del --getpatch` command.
+Adjust the `--patch-bam` and `--patch-reads` filenames to match the exact files produced by your `cnvinject del --getpatch` command.
 
 ---
 
 # Manual 
+
+Available commands:
+
+| Command | Status | Purpose |
+|---|---:|---|
+| `del` | Implemented | Inject a deletion into a BAM. |
+| `mergepatch` | Implemented | Merge an edited patch BAM back into the original input BAM. |
+| `dup` | Placeholder | Future command for duplication/amplification simulation. |
 
 
 ## Main command
@@ -173,14 +173,6 @@ cnvinject mergepatch \
 cnvinject --help
 cnvinject <command> [options] -i <input.bam> -o <output_prefix> --copy-number <CN> --interval <chr:start-end>
 ```
-
-Available commands:
-
-| Command | Status | Purpose |
-|---|---:|---|
-| `del` | Implemented | Inject a deletion into a BAM. |
-| `mergepatch` | Implemented | Merge an edited patch BAM back into the original input BAM. |
-| `dup` | Placeholder | Future command for duplication/amplification simulation. |
 
 `--input, -i`
 ```text
@@ -204,9 +196,12 @@ Note, if `--copy-number 2` then the program will exit. Intervals are assumed to 
 
 
 `--interval`
+
+Takes samtools-style syntax.
+
+chromosome:1_base_start_genomic_coordinate-end_genomic_coordinate. Be sure to use the chromosome labels in your bam file.
+
 ```text
-#samtools-style syntax. 
-#chromosome:1_base_start_genomic_coordinate-end_genomic_coordinate 
 chr17:30780079-31936302
 ```
 
@@ -216,20 +211,8 @@ chr17:30780079-31936302
 
 ```bash
 cnvinject del --help
+cnvinject del [options] -i <input.bam> -o <OUTPUT_PREFIX> --copy-number <0> --interval <chr:start-end>
 ```
-
-
-```bash
-cnvinject del \
-  -i ~/project/input.bam \
-  -o OUTPUT_PREFIX \
-  --outdir ~/project/output \
-  --copy-number 0 \
-  --interval chr:start-end \
-  --getpatch \
-  --mapq 10
-```
-
 
 #### options
 
@@ -240,6 +223,7 @@ cnvinject del \
 | `-o`, `--output` | Yes | none | Output prefix or output BAM path, depending on workflow. For patch generation, this is typically used as the prefix for patch-related output files. |
 | `--copy-number` | Yes | none | Target deletion copy number. The CLI currently accepts `0` or `1`; only `0` is considered completed/validated at this time. |
 | `--interval` | Yes | none | CNV interval in `chr:start-end` format. Example: `chr17:30780079-31936302`. |
+| `--outdir` | No | current working directory | Output files will be directed to this directory. |
 | `--getpatch` | No | false | Write the edited patch BAM only instead of immediately producing a full edited BAM. This is useful for a two-step workflow where `mergepatch` is run separately. |
 | `--disable-cleanup` | No | false |  Keep all intermediate files. By default, cnvinject removes intermediates. It is recommended to disable cleanup for debugging purposes or if the user simply wants to better understand what is going on under the hood. |
 | `--mapq` | No | `0` | Minimum mapping quality for reads eligible for mutation. Use `0` to allow all mapped reads regardless of mapping quality. |
