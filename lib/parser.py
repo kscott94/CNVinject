@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
+from version import __version__
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(version: __version__) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cnvinject",
         description="Inject synthetic CNVs into BAM files."
@@ -11,6 +12,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest="command",
         required=True
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"cnvinject {version}",
     )
 
     # cnvinject del ----------------------------------------------

@@ -4,6 +4,7 @@ import argparse
 import random
 from pathlib import Path
 from parser import build_parser
+from version import __version__
 from patch import GenomicInterval, PatchDissector
 from deletion import DeletionEditor
 from breakpoints import BreakpointCandidateClassifier
@@ -15,8 +16,9 @@ from helpers import (align_fastq_with_bwa,
                      make_output_prefix,
                      cleanup_intermediate_files)
 
+
 def main() -> None:
-    parser = build_parser()
+    parser = build_parser(version=__version__)
     args = parser.parse_args()
 
     if args.command == "del":

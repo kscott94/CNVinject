@@ -1,4 +1,5 @@
 # CNVinject
+current release: version 0.0.1
 
 CNVinject is a command-line tool for injecting artificial copy number variants (CNVs) into existing BAM files while preserving the noise profile of the original sample.
 
