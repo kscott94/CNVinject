@@ -8,7 +8,7 @@ import csv
 import pysam
 
 from patch import GenomicInterval, PatchPaths
-
+from helpers import(qname_selected_for_deletion)
 
 @dataclass
 class PrimaryAlignment:
@@ -241,6 +241,11 @@ class ReadPairBreakpointStatus:
             if r2_class == "left_flank" and r1_class == "right_flank":
                 return "pair_spans_deletion_right_to_left"
 
+            # Retained fully-internal pairs are expected in fractional deletions.
+            # They should remain unchanged, not become breakpoint candidates.
+            if r1_class == "inside" and r2_class == "inside":
+                return "pair_inside_remaining"
+
             if self.any_on_target_overlap(interval):
                 return f"pair_other_interval_overlap.r1_{r1_class}.r2_{r2_class}"
 
@@ -308,10 +313,14 @@ class BreakpointCandidateClassifier:
         edited_patch_bam: str | Path,
         output_prefix: str | Path,
         interval: GenomicInterval,
+        copy_number: float = 0.0,
+        seed: int = 1,
     ):
         self.edited_patch_bam = Path(edited_patch_bam)
         self.paths = PatchPaths(output_prefix)
         self.interval = interval
+        self.copy_number = float(copy_number)
+        self.seed = int(seed)
 
         self.candidates_tsv = self.paths.prefix.with_name(
             f"{self.paths.prefix.name}.breakpoint.candidates.tsv"
@@ -351,6 +360,7 @@ class BreakpointCandidateClassifier:
             "qname",
             "classification",
             "is_breakpoint_candidate",
+            "selected_for_deletion",
             "read1_chrom",
             "read1_start0",
             "read1_end0",
@@ -383,14 +393,28 @@ class BreakpointCandidateClassifier:
                 if classification == "not_breakpoint_candidate":
                     continue
 
+                is_breakpoint_candidate = status.is_breakpoint_candidate(self.interval)
+
+                selected_for_deletion = (
+                        is_breakpoint_candidate
+                        and qname_selected_for_deletion(
+                    qname=qname,
+                    copy_number=self.copy_number,
+                    seed=self.seed,
+                )
+                )
+
                 row = status.to_tsv_row(
                     interval=self.interval,
                     classification=classification,
                 )
+
+                row["selected_for_deletion"] = str(selected_for_deletion)
+
                 writer.writerow(row)
                 n_tsv_rows += 1
 
-                if status.is_breakpoint_candidate(self.interval):
+                if selected_for_deletion:
                     candidate_qnames.add(qname)
 
         return len(candidate_qnames), n_tsv_rows

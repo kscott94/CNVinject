@@ -67,11 +67,12 @@ class SyntheticBreakpointReadGenerator:
         """
         rows = []
 
-        with open(self.candidates_tsv) as handle:
+        with (open(self.candidates_tsv) as handle):
             reader = csv.DictReader(handle, delimiter="\t")
 
             for row in reader:
-                if row.get("is_breakpoint_candidate") == "True":
+                if (row.get("is_breakpoint_candidate") == "True"
+                    and row.get("selected_for_deletion") == "True"):
                     rows.append(row)
 
         return rows

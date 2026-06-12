@@ -9,3 +9,27 @@
 *.md text eol=lf
 README text eol=lf
 bin/* text eol=lf
+
+# --- Binary files: never normalize line endings or attempt text diffs ---
+
+# Sequencing alignment formats
+*.bam binary
+*.bai binary
+*.cram binary
+*.crai binary
+
+# Variant calls, feature indexes, and compressed data
+*.bcf binary
+*.tbi binary
+*.csi binary
+*.gz binary
+*.bgz binary
+
+# Other binary assets (docs images, archives, 2bit references)
+*.2bit binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary

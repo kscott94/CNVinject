@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
+from version import __version__
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(version: __version__) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cnvinject",
         description="Inject synthetic CNVs into BAM files."
@@ -11,6 +12,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest="command",
         required=True
+    )
+
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"cnvinject {version}",
     )
 
     # cnvinject del ----------------------------------------------
@@ -51,7 +59,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--donor-bam-dir",
         dest="donor_bam_dir",
         required=True,
-        help="Directory containing BAMs for duplication read sampling. Will not use a bam file with the same name as input bam file."
+        help="Directory containing BAMs for duplication read sampling. "
+             "Will not use a bam file with the same name as input bam file."
+    )
+
+    dup_parser.add_argument(
+        "--allow-replacement",
+        action="store_true",
+        help=(
+            "Allow donor breakpoint qnames to be sampled with replacement if the "
+            "donor breakpoint pool is too small. Default: fail if donor pool is insufficient."
+        ),
     )
 
     # cnvinject mergepatch ---------------------------------------
