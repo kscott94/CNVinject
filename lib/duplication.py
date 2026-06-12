@@ -266,8 +266,22 @@ class DuplicationEditor:
 
         return selected_by_donor
 
-    def renamed_qname(self, qname: str, donor_index: int) -> str:
-        return f"{qname}:CNVinject_donor{donor_index + 1}"
+    def donor_label(self, donor_bam: Path) -> str:
+        """
+        Stable donor label for qname suffixes.
+
+        Uses the BAM stem and sanitizes characters that could be annoying
+        inside read names.
+        """
+        label = donor_bam.stem
+        label = label.replace(" ", "_")
+        label = label.replace("/", "_")
+        label = label.replace("\\", "_")
+        label = label.replace(":", "_")
+        return label
+
+    def renamed_qname(self, qname: str, donor_bam: Path) -> str:
+        return f"{qname}:CNVinject_donor_{self.donor_label(donor_bam)}"
 
     def write_added_internal_records_bam(
         self,
@@ -299,7 +313,7 @@ class DuplicationEditor:
                 with open(self.donor_selected_qnames, "w") as qname_out:
                     qname_out.write("donor_bam\toriginal_qname\trenamed_qname\n")
 
-                    for donor_index, (donor_bam, selected_qnames) in enumerate(selected_by_donor.items()):
+                    for donor_bam, selected_qnames in selected_by_donor.items():
                         print(
                             f"Donor selected qnames: {donor_bam.name}: "
                             f"{len(selected_qnames):,}"
@@ -308,7 +322,7 @@ class DuplicationEditor:
                         self.n_qnames_selected += len(selected_qnames)
 
                         rename_map = {
-                            qname: self.renamed_qname(qname, donor_index)
+                            qname: self.renamed_qname(qname, donor_bam)
                             for qname in selected_qnames
                         }
 

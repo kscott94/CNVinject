@@ -570,7 +570,8 @@ def cleanup_intermediate_files(
     keep_full_final: bool = True,
 ) -> None:
     """
-    Remove intermediate files created by the CN0 workflow.
+    Remove intermediate files created by the cnvinject deletion and
+    duplication workflows.
 
     Default retained files:
         PREFIX.final.patch.bam
@@ -599,6 +600,12 @@ def cleanup_intermediate_files(
         Path(f"{prefix}.patch.bam.bai"),
         Path(f"{prefix}.edited.patch.bam"),
         Path(f"{prefix}.edited.patch.bam.bai"),
+        Path(f"{prefix}.edited.patch.unsorted.tmp.bam"),
+        Path(f"{prefix}.recipient.internal.qnames.txt"),
+        Path(f"{prefix}.donor.selected.internal.qnames.tsv"),
+        Path(f"{prefix}.added.internal.records.bam"),
+        Path(f"{prefix}.added.internal.records.bam.bai"),
+        Path(f"{prefix}.added.internal.records.unsorted.tmp.bam"),
         Path(f"{prefix}.breakpoint.paired.bam"),
         Path(f"{prefix}.breakpoint.paired.bam.bai"),
         Path(f"{prefix}.breakpoint.singletons.bam"),
@@ -615,6 +622,9 @@ def cleanup_intermediate_files(
         Path(f"{prefix}.added.outer.breakpoint.records.bam"),
         Path(f"{prefix}.added.outer.breakpoint.records.bam.bai"),
         Path(f"{prefix}.added.outer.breakpoint.records.unsorted.tmp.bam"),
+        Path(f"{prefix}.added.outer.breakpoint.jittered.fastq"),
+        Path(f"{prefix}.added.outer.breakpoint.jittered.bam"),
+        Path(f"{prefix}.added.outer.breakpoint.jittered.bam.bai"),
         Path(f"{prefix}.tandem.junction.synthetic.reads.fastq"),
         Path(f"{prefix}.tandem.junction.synthetic.reads.bam"),
         Path(f"{prefix}.tandem.junction.synthetic.reads.bam.bai"),
@@ -624,4 +634,3 @@ def cleanup_intermediate_files(
     for path in candidates:
         if path not in keep:
             remove_file_if_exists(path)
-

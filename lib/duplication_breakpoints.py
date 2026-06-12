@@ -539,9 +539,7 @@ class DuplicationBreakpointEditor:
                         "donor_bam\toriginal_qname\trenamed_qname\tside\toccurrence_index\n"
                     )
 
-                    for donor_index, ((donor_bam, side), templates) in enumerate(
-                        selected_by_donor_side.items()
-                    ):
+                    for (donor_bam, side), templates in selected_by_donor_side.items():
                         counts_by_qname: dict[str, int] = defaultdict(int)
                         selected_qnames = {template.qname for template in templates}
 
@@ -1028,6 +1026,17 @@ def merge_duplication_patch_with_breakpoints(
 
     final_patch_bam = prefix.with_name(f"{prefix.name}.final.patch.bam")
     unsorted_bam = prefix.with_name(f"{prefix.name}.final.patch.unsorted.tmp.bam")
+
+    edited_patch_bam = Path(edited_patch_bam)
+    added_outer_breakpoint_records_bam = Path(added_outer_breakpoint_records_bam)
+
+    # Required inputs: fail clearly rather than emitting a cryptic samtools error
+    # or a silently incomplete duplication patch.
+    for required in (edited_patch_bam, added_outer_breakpoint_records_bam):
+        if not required.exists():
+            raise FileNotFoundError(
+                f"Required input BAM for duplication merge is missing: {required}"
+            )
 
     merge_inputs = [
         str(edited_patch_bam),
