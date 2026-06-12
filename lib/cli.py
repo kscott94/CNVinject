@@ -7,14 +7,20 @@ from parser import build_parser
 from version import __version__
 from patch import GenomicInterval, PatchDissector
 from deletion import DeletionEditor
-from breakpoints import BreakpointCandidateClassifier
+from deletion_breakpoints import BreakpointCandidateClassifier
+from duplication import DuplicationEditor
+from duplication_breakpoints import (
+    DuplicationBreakpointEditor,
+    merge_duplication_patch_with_breakpoints,
+)
 from synthetic_reads import SyntheticBreakpointReadGenerator
 from final_patch import FinalPatchBuilder
 from mergepatch import MergePatchBuilder
 from helpers import (align_fastq_with_bwa,
                      fastq_has_records,
                      make_output_prefix,
-                     cleanup_intermediate_files)
+                     cleanup_intermediate_files,
+                     sort_and_index_bam)
 
 
 def main() -> None:
@@ -47,11 +53,12 @@ def run_deletion(args: argparse.Namespace) -> None:
 
     print("Running deletion workflow")
 
-    if args.copy_number < 0 or args.copy_number >= 2:
+    if args.copy_number < 0:
         raise ValueError("cnvinject del requires --copy-number >= 0 and < 2")
 
     if args.copy_number >= 2:
-        raise ValueError("cnvinject del requires --copy-number < 2")
+        raise ValueError("Input bam is assumed diploid. "
+                         "cnvinject del requires --copy-number < 2")
 
     if args.seed is None:
         seed = random.randrange(0, 2 ** 32)
@@ -172,12 +179,12 @@ def run_deletion(args: argparse.Namespace) -> None:
 
 
 def run_duplication(args: argparse.Namespace) -> None:
-    if args.copy_number <= 2:
+    if args.copy_number < 2:
         raise ValueError("cnvinject dup requires --copy-number > 2")
 
     if args.copy_number == 2:
-        raise ValueError("cnvinject del requires --copy-number > 2"
-                         "Intervals are assumed to have a copy number of two. "
+        raise ValueError("cnvinject del requires --copy-number > 2. "
+                         "Intervals are assumed to have a copy number of 2. "
                          "If the sample is haploid, you can simulate a diploid state "
                          "with cnvinject dup --copy-number 4, which will double the "
                          "coverage at the target interval")
@@ -185,6 +192,8 @@ def run_duplication(args: argparse.Namespace) -> None:
     if args.seed is None:
         seed = random.randrange(0, 2 ** 32)
         print(f"Seed: none supplied; generated runtime seed")
+    else:
+        seed = args.seed
 
     print("Running duplication workflow")
     print(f"Seed: {seed}")
@@ -201,7 +210,71 @@ def run_duplication(args: argparse.Namespace) -> None:
         threads=args.threads,
     )
 
-    dissector.run()
+    patch_result = dissector.run()
+
+    editor = DuplicationEditor(
+        input_patch_bam=patch_result.patch_bam,
+        donor_bam_dir=args.donor_bam_dir,
+        recipient_input_bam=args.input,
+        output_prefix=output_prefix,
+        interval=interval,
+        copy_number=args.copy_number,
+        seed=seed,
+        mapq=args.mapq,
+        threads=args.threads,
+    )
+
+    duplication_result = editor.run()
+
+    breakpoint_editor = DuplicationBreakpointEditor(
+        recipient_patch_bam=patch_result.patch_bam,
+        donor_bam_dir=args.donor_bam_dir,
+        recipient_input_bam=args.input,
+        output_prefix=output_prefix,
+        interval=interval,
+        copy_number=args.copy_number,
+        seed=seed,
+        reference_fasta=args.reference,
+        mapq=args.mapq,
+        threads=args.threads,
+        bwa_args=args.bwa_args,
+        allow_replacement=args.allow_replacement,
+    )
+
+    breakpoint_result = breakpoint_editor.run()
+
+    final_patch_bam = merge_duplication_patch_with_breakpoints(
+        edited_patch_bam=duplication_result.edited_patch_bam,
+        added_outer_breakpoint_records_bam=breakpoint_result.added_outer_breakpoint_records_bam,
+        added_outer_breakpoint_jittered_bam=breakpoint_result.added_outer_breakpoint_jittered_bam,
+        tandem_junction_bam=breakpoint_result.tandem_junction_bam,
+        output_prefix=output_prefix,
+        threads=args.threads,
+    )
+
+    if not args.getpatch:
+        merge_builder = MergePatchBuilder(
+            full_bam=args.input,
+            final_patch_bam=final_patch_bam,
+            patch_qnames=patch_result.patch_qnames,
+            output_bam=Path(f"{output_prefix}.final.bam"),
+            threads=args.threads,
+        )
+        merge_builder.run()
+    else:
+        print("--getpatch, Skipping full BAM reconstruction.")
+
+    if args.disable_cleanup:
+        print("--disable-cleanup, Keeping intermediate files.")
+    else:
+        cleanup_intermediate_files(
+            output_prefix=output_prefix,
+            keep_full_final=not args.getpatch,
+        )
+
+
+
+
 
 
 def run_mergepatch(args: argparse.Namespace) -> None:
