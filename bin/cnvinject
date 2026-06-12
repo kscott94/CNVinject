@@ -26,9 +26,11 @@ then
     echo "" >&2
     echo "Try one of these:" >&2
     echo "  1. Activate your virtual environment:" >&2
+    echo "       conda activate cnvinject" >&2
+    echo "       or" >&2
     echo "       source /path/to/.venv/bin/activate" >&2
     echo "" >&2
-    echo "  2. Install pysam into the active environment:" >&2
+    echo "  2. Install pysam into the active environment with pip:" >&2
     echo "       python3 -m pip install pysam" >&2
     echo "" >&2
     echo "  3. Tell cnvinject which Python to use:" >&2
