@@ -8,7 +8,6 @@ The primary goal of CNVinject is to generate realistic positive-control BAMs for
 CNVinject modifies an existing BAM by extracting aligned reads from a defined local genomic region (patch), editing the reads in that patch to represent the desired copy number state, and then replacing those reads in the input BAM to simulate a CNV. This approach preserves many properties of the original data and is compatible with read-depth and breakpoint-aware CNV callers. Read eligibility for modification is defined by the user.
 
 What CNVinject preserves:
-
 - breakpoints where possible;
 - native sequencing depth;
 - uneven and low coverage;
