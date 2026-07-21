@@ -4,6 +4,7 @@ import subprocess
 import argparse
 import shlex
 import hashlib
+import pysam
 from pathlib import Path
 
 
