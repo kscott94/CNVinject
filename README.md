@@ -7,8 +7,12 @@ The primary goal of CNVinject is to generate realistic positive-control BAMs for
 CNVinject modifies an existing BAM by extracting aligned reads from a defined local genomic region (patch), editing the reads in that patch to represent the desired copy number state, and then replacing those edited reads in input BAM to simulate a CNV. This approach preserves many properties of the original data and is compatible with read-depth and breakpoint aware CNV callers. Read eligibility for modification is defined by the user. 
 
 What CNVinject preserves:
+<<<<<<< HEAD
 
 - breakpoints where possibe
+=======
+- breakpoints where possible;
+>>>>>>> 3201fc8eade9b7902873f96387fe3cbefebb9ead
 - native sequencing depth;
 - uneven and low coverage;
 - whole-genome amplification artifacts;
@@ -16,15 +20,25 @@ What CNVinject preserves:
 - duplicate reads;
 - local mapping artifacts recorded in CIGAR string (mismatches, deletions, insertions);
 - incomplete read pairs;
+<<<<<<< HEAD
 - read-length, insert-size, and alignment behavior.
+=======
+- read-length, insert-size, and alignment behavior
+>>>>>>> 3201fc8eade9b7902873f96387fe3cbefebb9ead
 
 ---
 
 > **Current implementation status**
 >
+<<<<<<< HEAD
 > - `cnvinject del` --copy-number [0 to <2] is implemented for simulating deletions.
 > - `cnvinject dup` is a placeholder for duplication simulation.
 > - `cnvinject mergepatch` is implemented for merging an edited patch or alignments back into the original full BAM.
+=======
+> - `cnvinject del` (`--copy-number` 0 to <2) is implemented for simulating deletions, including fractional/mosaic deletions.
+> - `cnvinject dup` (`--copy-number` > 2) is implemented for simulating duplications, including fractional/mosaic duplications.
+> - `cnvinject mergepatch` is implemented for merging an edited patch back into the original full BAM.
+>>>>>>> 3201fc8eade9b7902873f96387fe3cbefebb9ead
 
 ---
 
