@@ -5,6 +5,7 @@ import argparse
 import shlex
 import hashlib
 import pysam
+from version import __version__
 from pathlib import Path
 
 
