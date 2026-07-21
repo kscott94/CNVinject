@@ -1,9 +1,87 @@
 import re
+import sys
 import subprocess
 import argparse
 import shlex
 import hashlib
 from pathlib import Path
+
+
+def validate_reference_matches_bam(reference_fasta, bam, interval_chrom=None):
+    """
+    Verify a BAM's @SQ contigs are consistent with the reference FASTA's .fai,
+    by name and length. Reads only the BAM header and the .fai index -- no
+    alignment records are scanned, so this is effectively instant.
+
+    Raises ValueError on any mismatch so the CLI reports a clean message.
+
+    If interval_chrom is given, that contig must be present in both.
+    """
+    reference_fasta = Path(reference_fasta)
+    fai = Path(f"{reference_fasta}.fai")
+
+    if not fai.exists():
+        raise ValueError(
+            f"Reference index not found: {fai}. Create it with: samtools faidx {reference_fasta}"
+        )
+
+    # Reference contigs -> {name: length} from the .fai (cols 1,2).
+    ref_lengths = {}
+    with open(fai) as handle:
+        for line in handle:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) >= 2:
+                ref_lengths[fields[0]] = int(fields[1])
+
+    # BAM @SQ contigs -> {name: length} from the header only.
+    header = subprocess.run(
+        ["samtools", "view", "-H", str(bam)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+    bam_lengths = {}
+    for line in header.splitlines():
+        if not line.startswith("@SQ"):
+            continue
+        name = length = None
+        for field in line.split("\t"):
+            if field.startswith("SN:"):
+                name = field[3:]
+            elif field.startswith("LN:"):
+                length = int(field[3:])
+        if name is not None:
+            bam_lengths[name] = length
+
+    # Every BAM contig must exist in the reference at the same length.
+    mismatches = []
+    for name, length in bam_lengths.items():
+        if name not in ref_lengths:
+            mismatches.append(f"{name}: absent from reference")
+        elif ref_lengths[name] != length:
+            mismatches.append(
+                f"{name}: length {length} in BAM vs {ref_lengths[name]} in reference"
+            )
+
+    if mismatches:
+        detail = "\n  ".join(mismatches)
+        raise ValueError(
+            f"BAM contigs are inconsistent with reference {reference_fasta}:\n  {detail}\n"
+            f"Check that the interval/BAM chromosome naming matches the reference "
+            f"(e.g. 'chr1' vs '1')."
+        )
+
+    # The CNV's own contig must be usable in both.
+    if interval_chrom is not None:
+        if interval_chrom not in ref_lengths:
+            raise ValueError(
+                f"Interval contig {interval_chrom!r} not found in reference {reference_fasta}."
+            )
+        if interval_chrom not in bam_lengths:
+            raise ValueError(
+                f"Interval contig {interval_chrom!r} not found in BAM {bam}."
+            )
 
 
 def reverse_complement(seq: str) -> str:
@@ -332,8 +410,6 @@ def align_fastq_with_bwa(
     """
     Align a FASTQ file to a reference using bwa mem, then sort and index with samtools.
 
-    Parameters
-    ----------
     fastq:
         Input FASTQ file.
 
@@ -456,7 +532,6 @@ def align_fastq_with_bwa(
 def make_output_prefix(args: argparse.Namespace) -> Path:
     """
     Combine --outdir and -o/--output into one output prefix path.
-
     If args.output already includes a directory, it is still placed under --outdir
     unless it is absolute.
     """
@@ -484,7 +559,6 @@ def remove_file_if_exists(path: str | Path) -> None:
 def deletion_fraction(copy_number: float) -> float:
     """
     Fraction of eligible molecules to delete/modify for a deletion.
-
     Assumes normal diploid copy number is 2.
     """
     if copy_number < 0 or copy_number >= 2:
@@ -500,7 +574,6 @@ def qname_selected_for_deletion(
 ) -> bool:
     """
     Decide whether a qname is deleted.
-
     Same qname + same seed + same copy number always gives the same result.
     """
     prob = deletion_fraction(copy_number)
@@ -634,3 +707,67 @@ def cleanup_intermediate_files(
     for path in candidates:
         if path not in keep:
             remove_file_if_exists(path)
+
+def add_cnvinject_pg_line(
+    bam_path: str | Path,
+    command_line: str | None = None,
+    threads: int = 1,
+) -> None:
+    """
+    Append a CNVinject @PG record to a BAM header, then reindex.
+
+    Uses `samtools reheader`, which replaces the header without recompressing
+    the alignment records, so this stays cheap even on a full-genome BAM.
+    The BAM is reindexed afterward because the header size changes.
+    """
+
+    bam_path = Path(bam_path)
+
+    if command_line is None:
+        command_line = " ".join(sys.argv)
+
+    with pysam.AlignmentFile(bam_path, "rb") as bam:
+        header = bam.header.to_dict()
+
+    pg_records = list(header.get("PG", []))
+
+    # Unique @PG ID, even across repeated CNVinject runs on the same file.
+    existing_ids = {pg.get("ID") for pg in pg_records}
+    pg_id = "CNVinject"
+    suffix = 1
+    while pg_id in existing_ids:
+        pg_id = f"CNVinject.{suffix}"
+        suffix += 1
+
+    new_pg = {
+        "ID": pg_id,
+        "PN": "cnvinject",
+        "VN": __version__,
+        "CL": command_line,
+    }
+
+    # Chain onto the most recently added program (samtools convention).
+    if pg_records:
+        new_pg["PP"] = pg_records[-1]["ID"]
+
+    header["PG"] = pg_records + [new_pg]
+    new_header = pysam.AlignmentHeader.from_dict(header)
+
+    tmp_header = bam_path.parent / (bam_path.name + ".cnvinject.header.tmp.sam")
+    tmp_bam = bam_path.parent / (bam_path.name + ".cnvinject.reheader.tmp.bam")
+
+    try:
+        tmp_header.write_text(str(new_header))
+
+        with open(tmp_bam, "wb") as out:
+            subprocess.run(
+                ["samtools", "reheader", str(tmp_header), str(bam_path)],
+                check=True,
+                stdout=out,
+            )
+
+        tmp_bam.replace(bam_path)
+    finally:
+        tmp_header.unlink(missing_ok=True)
+        if tmp_bam.exists():
+            tmp_bam.unlink()

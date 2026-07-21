@@ -163,7 +163,17 @@ class PatchDissector:
         self.mapq = mapq
         self.threads = threads
 
-        self.patch_interval = self.interval.with_buffer(self.buffer_size)
+        buffered = self.interval.with_buffer(self.buffer_size)
+        with pysam.AlignmentFile(self.input_bam, "rb") as bam:
+            if buffered.chrom not in bam.references:
+                raise ValueError(
+                    f"Contig {buffered.chrom!r} not found in {self.input_bam}. "
+                    f"Check that the interval's chromosome matches the BAM's naming "
+                    f"(e.g. 'chr1' vs '1')."
+                )
+            chrom_len = bam.get_reference_length(buffered.chrom)
+        end = min(buffered.end, chrom_len)
+        self.patch_interval = GenomicInterval(chrom=buffered.chrom, start=buffered.start, end=end)
 
         # Make sure the output directory exists.
         self.paths.prefix.parent.mkdir(parents=True, exist_ok=True)

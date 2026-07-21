@@ -401,6 +401,20 @@ class SyntheticBreakpointReadGenerator:
         original_ref_seq = original_ref_seq.upper()
         new_ref_seq = new_ref_seq.upper()
 
+        # Guard: fasta.fetch() silently truncates near a contig end, so new_ref_seq
+        # can be shorter than the reference span the CIGAR consumes. Pad with N so
+        # replayed M/=/X operations never index past the end. Synthetic bases that
+        # fall in the pad become N (harmless; bwa will soft-clip/realign them).
+        ref_consuming = sum(
+            length
+            for length, op in parse_cigar_tuples(read.cigarstring)
+            if op in {"M", "=", "X", "D", "N"}
+        )
+        if len(new_ref_seq) < ref_consuming:
+            new_ref_seq = new_ref_seq + "N" * (ref_consuming - len(new_ref_seq))
+        if len(original_ref_seq) < ref_consuming:
+            original_ref_seq = original_ref_seq + "N" * (ref_consuming - len(original_ref_seq))
+
         qpos = 0
         rpos = 0
         synthetic_parts = []

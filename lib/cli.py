@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 import random
 from pathlib import Path
@@ -11,8 +12,7 @@ from deletion_breakpoints import BreakpointCandidateClassifier
 from duplication import DuplicationEditor
 from duplication_breakpoints import (
     DuplicationBreakpointEditor,
-    merge_duplication_patch_with_breakpoints,
-)
+    merge_duplication_patch_with_breakpoints,)
 from synthetic_reads import SyntheticBreakpointReadGenerator
 from final_patch import FinalPatchBuilder
 from mergepatch import MergePatchBuilder
@@ -20,7 +20,8 @@ from helpers import (align_fastq_with_bwa,
                      fastq_has_records,
                      make_output_prefix,
                      cleanup_intermediate_files,
-                     sort_and_index_bam)
+                     add_cnvinject_pg_line,
+                     validate_reference_matches_bam,)
 
 
 def main() -> None:
@@ -74,8 +75,10 @@ def run_deletion(args: argparse.Namespace) -> None:
         print("Only primary alignments are eligible for modification.")
 
     interval = GenomicInterval.from_string(args.interval)
+    validate_reference_matches_bam(args.reference, args.input, interval_chrom=interval.chrom)
     output_prefix = make_output_prefix(args)
 
+    # Get patch bam
     dissector = PatchDissector(
         input_bam=args.input,
         output_prefix=output_prefix,
@@ -88,6 +91,7 @@ def run_deletion(args: argparse.Namespace) -> None:
 
     patch_result = dissector.run()
 
+    # Edit patch reads
     editor = DeletionEditor(
         input_patch_bam=patch_result.patch_bam,
         output_prefix=output_prefix,
@@ -169,6 +173,15 @@ def run_deletion(args: argparse.Namespace) -> None:
     else:
         print("--getpatch, Skipping full BAM reconstruction.")
 
+    # Add PG header
+    if args.getpatch:
+        final_output = final_patch_result.final_patch_bam
+    else:
+        final_output = Path(f"{output_prefix}.final.bam")
+
+    add_cnvinject_pg_line(final_output, command_line=" ".join(sys.argv), threads=args.threads)
+
+    # Clean up intermediate files
     if args.disable_cleanup:
         print("--disable-cleanup, Keeping intermediate files.")
     else:
@@ -199,8 +212,10 @@ def run_duplication(args: argparse.Namespace) -> None:
     print(f"Seed: {seed}")
 
     interval = GenomicInterval.from_string(args.interval)
+    validate_reference_matches_bam(args.reference, args.input, interval_chrom=interval.chrom)
     output_prefix = make_output_prefix(args)
 
+    # Get patch bam
     dissector = PatchDissector(
         input_bam=args.input,
         output_prefix=output_prefix,
@@ -212,6 +227,7 @@ def run_duplication(args: argparse.Namespace) -> None:
 
     patch_result = dissector.run()
 
+    # Edit patch reads
     editor = DuplicationEditor(
         input_patch_bam=patch_result.patch_bam,
         donor_bam_dir=args.donor_bam_dir,
@@ -264,6 +280,15 @@ def run_duplication(args: argparse.Namespace) -> None:
     else:
         print("--getpatch, Skipping full BAM reconstruction.")
 
+    # Add PG header
+    if args.getpatch:
+        final_output = final_patch_bam
+    else:
+        final_output = Path(f"{output_prefix}.final.bam")
+
+    add_cnvinject_pg_line(final_output, command_line=" ".join(sys.argv), threads=args.threads)
+
+    # Remove intermediate files
     if args.disable_cleanup:
         print("--disable-cleanup, Keeping intermediate files.")
     else:
@@ -271,10 +296,6 @@ def run_duplication(args: argparse.Namespace) -> None:
             output_prefix=output_prefix,
             keep_full_final=not args.getpatch,
         )
-
-
-
-
 
 
 def run_mergepatch(args: argparse.Namespace) -> None:
@@ -289,6 +310,9 @@ def run_mergepatch(args: argparse.Namespace) -> None:
     )
 
     merge_builder.run()
+
+    # Add PG header
+    add_cnvinject_pg_line(args.output, command_line=" ".join(sys.argv), threads=args.threads)
 
 
 if __name__ == "__main__":
