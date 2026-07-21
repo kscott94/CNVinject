@@ -177,10 +177,22 @@ class SyntheticBreakpointReadGenerator:
             return self.reference_span_sequence(fasta, read)
 
         if action == "shift_to_right_flank":
-            # Preserve offset from the left breakpoint.
+            chrom_len = fasta.get_reference_length(self.interval.chrom)
+
             offset = read.reference_start - self.interval.start0
             new_start = self.interval.end0 + offset
             new_end = new_start + ref_len
+
+            # Right flank may be smaller than the deletion width.
+            if new_end > chrom_len:
+                if chrom_len - self.interval.end0 >= ref_len:
+                    new_end = chrom_len
+                    new_start = chrom_len - ref_len
+                    return fasta.fetch(self.interval.chrom, new_start, new_end).upper()
+                # Right flank smaller than read: fall back to left flank.
+                new_end = self.interval.start0
+                new_start = max(0, new_end - ref_len)
+                return fasta.fetch(self.interval.chrom, new_start, new_end).upper()
 
             return fasta.fetch(self.interval.chrom, new_start, new_end).upper()
 
@@ -206,11 +218,24 @@ class SyntheticBreakpointReadGenerator:
             new_end = self.interval.start0 - offset
             new_start = new_end - ref_len
 
+            # The left flank may be smaller than the deletion width, so the
+            # computed window can fall before the chromosome start. Clamp into
+            # the available left flank; if there is none, fall back to the right
+            # flank. The read's bases are what matter downstream, not exact placement.
             if new_start < 0:
-                raise ValueError(
-                    f"Read {read.query_name} shift_to_left_flank produced "
-                    f"negative coordinate: {new_start}"
-                )
+                if self.interval.start0 >= ref_len:
+                    # Left flank exists but is too small for the offset:
+                    # place the read at the left edge of the flank.
+                    new_start = 0
+                    new_end = ref_len
+                    return fasta.fetch(self.interval.chrom, new_start, new_end).upper()
+                # Left flank is smaller than the read: fall back to right flank.
+                new_start = self.interval.end0
+                new_end = new_start + ref_len
+                if new_end > chrom_len:
+                    new_end = chrom_len
+                    new_start = max(0, chrom_len - ref_len)
+                return fasta.fetch(self.interval.chrom, new_start, new_end).upper()
 
             return fasta.fetch(self.interval.chrom, new_start, new_end).upper()
 
