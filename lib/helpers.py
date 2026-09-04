@@ -56,22 +56,27 @@ def validate_reference_matches_bam(reference_fasta, bam, interval_chrom=None):
         if name is not None:
             bam_lengths[name] = length
 
-    # Every BAM contig must exist in the reference at the same length.
-    mismatches = []
+    # Fatal only for LENGTH mismatches on shared contigs (wrong assembly build)
+    # and for the interval's own contig. Contigs present in the BAM but absent
+    # from the reference (decoy/HLA/ALT) are benign -- reads there are untouched.
+    fatal = []
     for name, length in bam_lengths.items():
-        if name not in ref_lengths:
-            mismatches.append(f"{name}: absent from reference")
-        elif ref_lengths[name] != length:
-            mismatches.append(
+        if name in ref_lengths and ref_lengths[name] != length:
+            fatal.append(
                 f"{name}: length {length} in BAM vs {ref_lengths[name]} in reference"
             )
 
-    if mismatches:
-        detail = "\n  ".join(mismatches)
+    n_absent = sum(1 for name in bam_lengths if name not in ref_lengths)
+    if n_absent:
+        print(
+            f"Note: {n_absent} BAM contig(s) (e.g. decoy/HLA/ALT) are absent from "
+            f"the reference; ignored (no CNV is injected there)."
+        )
+
+    if fatal:
+        detail = "\n  ".join(fatal)
         raise ValueError(
-            f"BAM contigs are inconsistent with reference {reference_fasta}:\n  {detail}\n"
-            f"Check that the interval/BAM chromosome naming matches the reference "
-            f"(e.g. 'chr1' vs '1')."
+            f"BAM and reference disagree on shared-contig lengths (wrong assembly build?):\n  {detail}"
         )
 
     # The CNV's own contig must be usable in both.
